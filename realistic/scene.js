@@ -242,6 +242,7 @@ function animate(now){
   if(needsFrame||!reduced||controls.autoRotate){composer.render();lastRender=now;needsFrame=false}
   if(now-labelsAt>90){updateLabels();labelsAt=now}
 }
+document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{last=performance.now();needsFrame=true});
 // Log only non-sensitive scene statistics, useful when comparing real devices.
 let meshes=0,triangles=0;scene.traverse(o=>{if(o.isMesh){meshes++;triangles+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1)}});

@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>硝子館 — 空間ビューア v0.2</title>
+<style>
+:root{
+  --bg:#B8D4F0;--chrome:rgba(12,16,22,.88);--border:rgba(90,120,140,.35);
+  --text:#f0f4f8;--muted:#a8b8c4;--accent:#7ec8d8;--pill:rgba(12,16,22,.82);
+  --label-bg:rgba(255,255,255,.88);--label-text:#1A2433;
+  --safe-b:env(safe-area-inset-bottom,0px);--safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Helvetica Neue",sans-serif;
+  -webkit-user-select:none;user-select:none;touch-action:none}
+#c{display:block;width:100%;height:100%;touch-action:none;position:absolute;inset:0}
+#label-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.room-label{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font-size:11px;font-weight:600;
+  letter-spacing:.02em;color:var(--label-text);background:var(--label-bg);border:1px solid rgba(26,36,51,.12);
+  border-radius:999px;padding:3px 9px;box-shadow:0 2px 8px rgba(26,36,51,.18);opacity:.96}
+.room-label.floor-badge{font-size:10px;opacity:.78}
+#hud-top{position:absolute;top:max(10px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  z-index:5;text-align:center;pointer-events:none}
+#hud-top h1{font-size:13px;font-weight:600;letter-spacing:.18em;color:var(--accent);text-shadow:0 1px 10px rgba(0,0,0,.55),0 0 1px rgba(0,0,0,.4)}
+#hud-top p{font-size:10px;color:var(--muted);margin-top:2px;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+#bar{position:absolute;left:0;right:0;bottom:0;z-index:10;
+  padding:10px 12px calc(10px + var(--safe-b)) 12px;
+  padding-left:calc(12px + var(--safe-l));padding-right:calc(12px + var(--safe-r));
+  background:linear-gradient(to top,rgba(10,14,20,.92) 72%,rgba(10,14,20,.55) 90%,transparent);
+  border-top:1px solid var(--border);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);touch-action:manipulation}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.row:last-child{margin-bottom:0}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+label.lbl{font-size:10px;color:var(--muted);letter-spacing:.06em}
+select,button{appearance:none;-webkit-appearance:none;background:rgba(22,28,36,.96);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;font-size:12px;padding:7px 10px;min-height:36px;touch-action:manipulation}
+select{padding-right:24px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 12px) 55%,calc(100% - 7px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+button{cursor:pointer}
+button.active,button[aria-pressed="true"]{background:rgba(80,140,160,.5);border-color:var(--accent);color:#fff}
+button:active{transform:scale(.97)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:min(140px,32vw);height:4px;
+  background:rgba(120,160,180,.3);border-radius:2px;outline:none;touch-action:manipulation}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;
+  background:var(--accent);border:2px solid #0c1016;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.mode-btns{display:flex;gap:4px}
+.mode-btns button{min-width:40px;padding:7px 8px;font-weight:600;font-size:11px}
+#note{font-size:9px;color:var(--muted);line-height:1.35}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="label-layer"></div>
+<div id="hud-top"><h1>硝子館</h1><p>空間ビューア · 図準拠 v0.3</p></div>
+<div id="bar">
+  <div class="row">
+    <div class="grp">
+      <label class="lbl" for="floorSel">階</label>
+      <select id="floorSel" aria-label="階ジャンプ">
+        <option value="all">全体</option>
+        <option value="-1">B1</option>
+        <option value="1">1F</option><option value="2">2F</option><option value="3">3F</option>
+        <option value="4">4F</option><option value="5">5F</option><option value="6">6F</option>
+        <option value="7">7F</option><option value="8">8F</option><option value="9">9F</option>
+        <option value="10">10F</option><option value="11">11F</option>
+      </select>
+    </div>
+    <div class="grp">
+      <label class="lbl">断面</label>
+      <div class="mode-btns">
+        <button type="button" id="clipVert" class="active" aria-pressed="true" title="縦断面（主・玄関軸）">縦</button>
+        <button type="button" id="clipHoriz" aria-pressed="false" title="水平カット（副）">水平</button>
+        <button type="button" id="clipOff" aria-pressed="false">OFF</button>
+      </div>
+      <label class="lbl" id="clipSliderLbl" for="clipH">方位</label>
+      <input type="range" id="clipH" min="0" max="1000" value="0" aria-label="断面パラメータ" />
+    </div>
+  </div>
+  <div class="row">
+    <div class="grp">
+      <button type="button" id="btnLabels" class="active" aria-pressed="true">ラベル ON</button>
+      <button type="button" id="btnReset">カメラリセット</button>
+    </div>
+    <p id="note">1本指回転 / 2本指ピンチ・パン。縦断面デフォルト＝正面玄関軸（0°）。空間名のみ。</p>
+  </div>
+</div>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ========== arch-spec-v0.3 ========== */
+const TOWER = {
+  H: 3.2, Hb: 3.2, slab: 0.28,
+  R_B1: 13.0, R1: 12.0, R2: 11.0, R11: 3.2,
+  rCore: 1.15, wStair: 1.35, wCorr: 1.4,
+  shellSides: 0, elevator: false, spiral: 'single',
+  stepsPerFloor: 18, tipExtra: 2.2,
+};
+
+const SPACES = [
+  { id:'b1-kit', floor:-1, name:'メインキッチン', az:225, span:120, kind:'service' },
+  { id:'b1-sto', floor:-1, name:'倉庫', az:315, span:80, kind:'service' },
+  { id:'b1-frz', floor:-1, name:'冷凍室', az:45, span:55, kind:'service' },
+  { id:'b1-gen', floor:-1, name:'発電室', az:90, span:70, kind:'service' },
+  { id:'f1-ent', floor:1, name:'正面玄関', az:0, span:35, kind:'entry' },
+  { id:'f1-cor', floor:1, name:'廊下', az:0, span:40, kind:'corridor' },
+  { id:'f1-hall', floor:1, name:'ホール', az:0, span:360, kind:'hall', ring:true },
+  { id:'f1-play', floor:1, name:'遊戯室', az:90, span:90, kind:'common' },
+  { id:'f1-th', floor:1, name:'シアター', az:180, span:85, kind:'common' },
+  { id:'f1-skit', floor:1, name:'サブキッチン', az:225, span:70, kind:'common' },
+  { id:'f1-din', floor:1, name:'ダイニング', az:315, span:90, kind:'common' },
+  { id:'f2-9', floor:2, name:'玖の部屋', az:135, span:100, kind:'guest' },
+  { id:'f2-10', floor:2, name:'拾の部屋', az:225, span:100, kind:'guest' },
+  { id:'f3-8', floor:3, name:'捌の部屋', az:225, span:110, kind:'guest' },
+  { id:'f4-7', floor:4, name:'漆の部屋', az:45, span:110, kind:'guest' },
+  { id:'f5-6', floor:5, name:'陸の部屋', az:0, span:110, kind:'guest' },
+  { id:'f6-5', floor:6, name:'伍の部屋', az:135, span:110, kind:'guest' },
+  { id:'f7-4', floor:7, name:'肆の部屋', az:135, span:110, kind:'guest' },
+  { id:'f8-3', floor:8, name:'参の部屋', az:45, span:110, kind:'guest' },
+  { id:'f9-2', floor:9, name:'弐の部屋', az:0, span:110, kind:'guest' },
+  { id:'f10-1', floor:10, name:'壱の部屋', az:0, span:110, kind:'guest' },
+  { id:'f11-obs', floor:11, name:'展望室', az:0, span:360, kind:'observe' },
+  { id:'f11-stair', floor:11, name:'階段室', az:0, span:60, kind:'stair-room', rOuterMax:true },
+];
+
+const FLOORS = [-1,1,2,3,4,5,6,7,8,9,10,11];
+const DEG = Math.PI / 180;
+const Y11 = 11 * TOWER.H;
+const tipY = Y11 + TOWER.H - TOWER.slab + TOWER.tipExtra;
+const GROUND_Y = -TOWER.Hb - 0.06;
+
+function yFloor(i){ return i >= 1 ? (i - 1) * TOWER.H : -TOWER.Hb; }
+function floorHeight(i){ return i === -1 ? TOWER.Hb : TOWER.H; }
+function radiusAtFloor(floor){
+  const { R_B1, R1, R11 } = TOWER;
+  if (floor <= -1) return R_B1;
+  if (floor <= 1) return R1;
+  return R1 + (R11 - R1) * ((floor - 1) / 10);
+}
+function radiusAtY(y){
+  if (y <= 0) return TOWER.R1 + (TOWER.R_B1 - TOWER.R1) * Math.min(1, Math.max(0, -y / TOWER.Hb));
+  if (y >= Y11) {
+    const t = Math.min(1, (y - Y11) / (tipY - Y11));
+    return Math.max(0.02, TOWER.R11 * (1 - t));
+  }
+  return TOWER.R1 + (TOWER.R11 - TOWER.R1) * (y / Y11);
+}
+function floorLabel(fi){ return fi === -1 ? 'B1' : fi + 'F'; }
+
+const canvas = document.getElementById('c');
+const labelLayer = document.getElementById('label-layer');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.localClippingEnabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.38;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xB8D4F0);
+scene.fog = new THREE.FogExp2(0xD4E6F4, 0.0048);
+
+/* winter sky dome — large inverted sphere gradient */
+(function buildSky(){
+  const skyGeo = new THREE.SphereGeometry(180, 32, 16);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(0xE8F2FA) },
+      midColor: { value: new THREE.Color(0xD4E8F5) },
+      botColor: { value: new THREE.Color(0xB8D4F0) },
+    },
+    vertexShader: `
+      varying vec3 vW;
+      void main(){
+        vec4 w = modelMatrix * vec4(position,1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: `
+      uniform vec3 topColor, midColor, botColor;
+      varying vec3 vW;
+      void main(){
+        float h = normalize(vW).y;
+        vec3 c = mix(botColor, midColor, smoothstep(-0.15, 0.25, h));
+        c = mix(c, topColor, smoothstep(0.2, 0.85, h));
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  sky.renderOrder = -1;
+  scene.add(sky);
+})();
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 400);
+camera.position.set(30, 20, 34);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = true;
+controls.panSpeed = 0.8;
+controls.rotateSpeed = 0.7;
+controls.zoomSpeed = 0.9;
+controls.minDistance = 4;
+controls.maxDistance = 130;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.target.set(0, Y11 * 0.32, 0);
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+controls.update();
+
+/* environment map for glass reflections */
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
+
+scene.add(new THREE.AmbientLight(0xE8F2FA, 0.75));
+const sun = new THREE.DirectionalLight(0xFFF6E8, 1.55);
+sun.position.set(42, 55, 18); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xa8c4e0, 0.48);
+fill.position.set(-28, 18, -36); scene.add(fill);
+scene.add(new THREE.HemisphereLight(0xDCEAFF, 0xF0F4F8, 0.58));
+
+const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+const clipPlanes = [clipPlane];
+let clipMode = 'vert';
+
+function applyClip(mat){
+  mat.clippingPlanes = clipMode === 'off' ? [] : clipPlanes;
+  mat.clipShadows = true;
+  mat.needsUpdate = true;
+}
+function makeGlass(){
+  const m = new THREE.MeshPhysicalMaterial({
+    color:0xC9E8FF, metalness:0, roughness:0.035, transmission:0.9,
+    thickness:0.55, ior:1.45, transparent:true, opacity:0.42,
+    side:THREE.DoubleSide, depthWrite:false,
+    clearcoat:1, clearcoatRoughness:0.05,
+    envMapIntensity:1.35,
+    iridescence:0.1, iridescenceIOR:1.3, iridescenceThicknessRange:[120, 380],
+  });
+  applyClip(m); return m;
+}
+function makeStd(color, o={}){
+  const m = new THREE.MeshStandardMaterial({
+    color, roughness:o.roughness??0.7, metalness:o.metalness??0.05,
+    transparent:!!o.transparent, opacity:o.opacity??1,
+    side:o.side??THREE.FrontSide, depthWrite:o.depthWrite??true,
+    emissive:o.emissive??0x000000, emissiveIntensity:o.emissiveIntensity??0,
+  });
+  applyClip(m); return m;
+}
+
+const matGlass = makeGlass();
+const matSlab = makeStd(0x8a8f96, { roughness:0.85 });
+const matCore = makeStd(0x8A9BB0, { roughness:0.55, metalness:0.45 });
+const matStairs = makeStd(0x9aa3ad, { roughness:0.45, metalness:0.55 });
+const matSnow = makeStd(0xEAF2F8, { roughness:0.92, emissive:0xF7FBFF, emissiveIntensity:0.06 });
+const matHall = makeStd(0x7a828a, { roughness:0.8, transparent:true, opacity:0.55 });
+const roomMats = {
+  guest: makeStd(0xb8a090,{roughness:0.7,transparent:true,opacity:0.9}),
+  common: makeStd(0xa8b8c0,{roughness:0.7,transparent:true,opacity:0.88}),
+  observe: makeStd(0xd0e8f0,{roughness:0.5,transparent:true,opacity:0.82}),
+  service: makeStd(0x6a7078,{roughness:0.8,transparent:true,opacity:0.9}),
+  entry: makeStd(0xc8d0d8,{roughness:0.6,transparent:true,opacity:0.75}),
+  corridor: makeStd(0x9aa3ad,{roughness:0.75,transparent:true,opacity:0.7}),
+  hall: matHall,
+  'stair-room': makeStd(0x5a6068,{roughness:0.65,metalness:0.15}),
+};
+const allMaterials = [matGlass,matSlab,matCore,matStairs,matSnow,matHall,...Object.values(roomMats)];
+
+function tag(mesh, floorIndex, extra={}){
+  mesh.userData.floorIndex = floorIndex;
+  Object.assign(mesh.userData, extra);
+  return mesh;
+}
+
+const towerRoot = new THREE.Group();
+towerRoot.name = 'tower';
+scene.add(towerRoot);
+const labelAnchors = [];
+
+/* --- circular cone shell --- */
+function buildShell(){
+  const pts = [];
+  const n = 24;
+  for (let i = 0; i <= n; i++){
+    const t = i / n;
+    const y = -TOWER.Hb + t * (tipY + TOWER.Hb);
+    pts.push(new THREE.Vector2(radiusAtY(y), y));
+  }
+  pts.push(new THREE.Vector2(0.01, tipY));
+  const geo = new THREE.LatheGeometry(pts, 64);
+  const mesh = new THREE.Mesh(geo, matGlass);
+  tag(mesh, 0, { spaceId:'shell', name:'ガラス外壁', kind:'shell' });
+  towerRoot.add(mesh);
+
+  // subtle vertical ribs — slightly more metallic/specular
+  const ribMat = makeStd(0xE8F6FF, { roughness:0.18, metalness:0.5, transparent:true, opacity:0.5 });
+  allMaterials.push(ribMat);
+  for (let i = 0; i < 12; i++){
+    const az = (i / 12) * Math.PI * 2;
+    const curve = [];
+    for (let j = 0; j <= 16; j++){
+      const t = j / 16;
+      const y = -TOWER.Hb + t * (tipY + TOWER.Hb);
+      const r = radiusAtY(y) * 0.998;
+      curve.push(new THREE.Vector3(Math.cos(az)*r, y, Math.sin(az)*r));
+    }
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve), 16, 0.03, 4, false), ribMat);
+    tag(tube, 0, { kind:'shell' });
+    towerRoot.add(tube);
+  }
+  // 2–3 white streak / rib highlights on shell
+  const hiMat = makeStd(0xffffff, { roughness:0.12, metalness:0.35, transparent:true, opacity:0.72 });
+  allMaterials.push(hiMat);
+  for (const azFrac of [0.08, 0.42, 0.78]){
+    const az = azFrac * Math.PI * 2;
+    const curve = [];
+    for (let j = 0; j <= 16; j++){
+      const t = j / 16;
+      const y = -TOWER.Hb + t * (tipY + TOWER.Hb);
+      const r = radiusAtY(y) * 1.002;
+      curve.push(new THREE.Vector3(Math.cos(az)*r, y, Math.sin(az)*r));
+    }
+    const hi = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curve), 16, 0.045, 4, false), hiMat);
+    tag(hi, 0, { kind:'shell' });
+    towerRoot.add(hi);
+  }
+}
+
+function buildCore(){
+  for (const fi of FLOORS){
+    const y0 = yFloor(fi), h = floorHeight(fi);
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.rCore, TOWER.rCore, h-0.02, 24), matCore);
+    seg.position.y = y0 + h/2;
+    tag(seg, fi, { spaceId:'core', name:'中心支柱', kind:'core' });
+    towerRoot.add(seg);
+  }
+  const top = yFloor(11) + TOWER.H;
+  const tipH = tipY - top;
+  if (tipH > 0.2){
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(TOWER.rCore*0.55, TOWER.rCore, tipH, 16), matCore);
+    tip.position.y = top + tipH/2;
+    tag(tip, 11, { spaceId:'core-tip', kind:'core' });
+    towerRoot.add(tip);
+  }
+}
+
+function buildSlabs(){
+  for (const fi of FLOORS){
+    const R = radiusAtFloor(fi);
+    const holeR = TOWER.rCore + TOWER.wStair + 0.12;
+    const shape = new THREE.Shape();
+    const segs = 64;
+    for (let i = 0; i <= segs; i++){
+      const a = (i/segs)*Math.PI*2;
+      const x = Math.cos(a)*R*0.98, z = Math.sin(a)*R*0.98;
+      if (i===0) shape.moveTo(x,z); else shape.lineTo(x,z);
+    }
+    const hole = new THREE.Path();
+    for (let i = 0; i <= 32; i++){
+      const a = (i/32)*Math.PI*2;
+      hole.lineTo(Math.cos(a)*holeR, Math.sin(a)*holeR);
+    }
+    shape.holes.push(hole);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: TOWER.slab, bevelEnabled:false });
+    geo.rotateX(-Math.PI/2);
+    const mesh = new THREE.Mesh(geo, matSlab);
+    mesh.position.y = yFloor(fi);
+    tag(mesh, fi, { spaceId:'slab-'+fi, name:floorLabel(fi)+'床', kind:'slab' });
+    towerRoot.add(mesh);
+
+    // corridor ring (all floors)
+    const ci = TOWER.rCore + TOWER.wStair;
+    const co = Math.min(ci + TOWER.wCorr, R * 0.5);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(ci, co, 48).rotateX(-Math.PI/2), matHall);
+    ring.position.y = yFloor(fi) + TOWER.slab + 0.01;
+    tag(ring, fi, { spaceId:'corr-'+fi, name:'環状廊下', kind:'corridor' });
+    towerRoot.add(ring);
+  }
+}
+
+function wedgeGeo(innerR, outerR, spanRad, height){
+  const shape = new THREE.Shape();
+  const segs = 14;
+  const half = spanRad / 2;
+  shape.moveTo(Math.cos(-half)*innerR, Math.sin(-half)*innerR);
+  for (let i=0;i<=segs;i++){ const a=-half+(i/segs)*spanRad; shape.lineTo(Math.cos(a)*outerR, Math.sin(a)*outerR); }
+  for (let i=segs;i>=0;i--){ const a=-half+(i/segs)*spanRad; shape.lineTo(Math.cos(a)*innerR, Math.sin(a)*innerR); }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth:height, bevelEnabled:false });
+  geo.rotateX(-Math.PI/2);
+  return geo;
+}
+
+function addLabel(name, floor, y, azRad, radius){
+  const el = document.createElement('div');
+  el.className = 'room-label';
+  el.textContent = name;
+  el.style.display = 'none';
+  labelLayer.appendChild(el);
+  const pos = new THREE.Vector3(Math.cos(azRad)*radius, y, Math.sin(azRad)*radius);
+  labelAnchors.push({ el, pos, floor, name });
+}
+
+function buildRooms(){
+  for (const sp of SPACES){
+    const fi = sp.floor;
+    const y0 = yFloor(fi) + TOWER.slab;
+    const h = floorHeight(fi) - TOWER.slab - 0.12;
+    const R = radiusAtFloor(fi);
+    const rInner = TOWER.rCore + TOWER.wStair + TOWER.wCorr;
+    let rOuter = R - 0.15;
+    const az = sp.az * DEG;
+    const span = sp.span * DEG;
+    const mat = roomMats[sp.kind] || roomMats.common;
+    const labelY = y0 + 1.4;
+
+    if (sp.ring){
+      // hall ring already represented; add label only
+      addLabel(sp.name, fi, labelY, 0, (rInner + Math.min(rInner+TOWER.wCorr, R*0.4))*0.5);
+      continue;
+    }
+
+    if (sp.kind === 'stair-room'){
+      const sr = TOWER.rCore + TOWER.wStair + 0.4;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(sr*1.6, h*0.85, sr*1.2), mat);
+      box.position.y = y0 + h*0.4;
+      tag(box, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+      towerRoot.add(box);
+      addLabel(sp.name, fi, labelY, az, sr*0.8);
+      continue;
+    }
+
+    if (sp.kind === 'observe' && sp.span >= 350){
+      // full-floor observation volume (thin shell walls)
+      const wall = new THREE.Mesh(
+        new THREE.CylinderGeometry(rOuter, rOuter*0.98, h*0.9, 48, 1, true),
+        mat
+      );
+      wall.position.y = y0 + h*0.45;
+      tag(wall, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+      towerRoot.add(wall);
+      const floorFill = new THREE.Mesh(
+        new THREE.RingGeometry(rInner, rOuter*0.95, 48).rotateX(-Math.PI/2),
+        makeStd(0xc8dce8,{roughness:0.6,transparent:true,opacity:0.5})
+      );
+      allMaterials.push(floorFill.material);
+      floorFill.position.y = y0 + 0.02;
+      tag(floorFill, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+      towerRoot.add(floorFill);
+      addLabel(sp.name, fi, labelY, Math.PI*0.25, (rInner+rOuter)*0.45);
+      continue;
+    }
+
+    if (sp.kind === 'entry'){
+      // entrance as outer opening wedge (shallower)
+      const ri = R * 0.72;
+      const geo = wedgeGeo(ri, rOuter, span, h*0.95);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.y = y0;
+      mesh.rotation.y = -az;
+      tag(mesh, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+      towerRoot.add(mesh);
+      addLabel(sp.name, fi, labelY, az, (ri+rOuter)*0.5);
+      continue;
+    }
+
+    if (sp.kind === 'corridor' && sp.id === 'f1-cor'){
+      const ri = rInner;
+      const ro = R * 0.75;
+      const geo = wedgeGeo(ri, ro, span, h*0.55);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.y = y0;
+      mesh.rotation.y = -az;
+      tag(mesh, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+      towerRoot.add(mesh);
+      addLabel(sp.name, fi, labelY, az, (ri+ro)*0.5);
+      continue;
+    }
+
+    const geo = wedgeGeo(rInner, rOuter, span, h);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = y0;
+    mesh.rotation.y = -az; // shape +X → world az
+    tag(mesh, fi, { spaceId:sp.id, name:sp.name, kind:sp.kind });
+    towerRoot.add(mesh);
+    addLabel(sp.name, fi, labelY, az, (rInner+rOuter)*0.5);
+  }
+}
+
+function buildStairs(){
+  const rMid = TOWER.rCore + TOWER.wStair * 0.5;
+  const stepW = TOWER.wStair;
+  const stepD = (2*Math.PI*rMid)/TOWER.stepsPerFloor * 0.85;
+  const stepH = TOWER.H / TOWER.stepsPerFloor;
+  const yStart = yFloor(-1);
+  const yEnd = yFloor(11) + TOWER.H;
+  const total = Math.ceil(((yEnd-yStart)/TOWER.H)*TOWER.stepsPerFloor);
+  for (let s=0;s<total;s++){
+    const y = yStart + s*stepH;
+    const turns = (y - yStart) / TOWER.H;
+    const az = turns * Math.PI * 2; // CCW
+    let fi = -1;
+    if (y >= 0) fi = Math.min(11, Math.floor(y / TOWER.H) + 1);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(stepW, stepH*0.85, stepD), matStairs);
+    mesh.position.set(Math.cos(az)*rMid, y+stepH*0.4, Math.sin(az)*rMid);
+    mesh.rotation.y = -az;
+    tag(mesh, fi, { spaceId:'stair', name:'螺旋階段', kind:'stair' });
+    towerRoot.add(mesh);
+  }
+}
+
+function buildGround(){
+  const g = new THREE.Mesh(new THREE.CircleGeometry(90, 64), matSnow);
+  g.rotation.x = -Math.PI/2;
+  g.position.y = GROUND_Y;
+  tag(g, -1, { spaceId:'ground', name:'雪地面', kind:'ground' });
+  scene.add(g);
+  const snowMat = makeStd(0xF7FBFF,{roughness:0.98, emissive:0xF7FBFF, emissiveIntensity:0.04});
+  allMaterials.push(snowMat);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(TOWER.R_B1*0.95, TOWER.R_B1*1.4, 48), snowMat);
+  ring.rotation.x = -Math.PI/2;
+  ring.position.y = -TOWER.Hb + 0.02;
+  tag(ring, -1, { kind:'ground' });
+  scene.add(ring);
+  // parking — pale asphalt with snow dusting (not a black hole)
+  const park = new THREE.Mesh(new THREE.PlaneGeometry(6, 3), makeStd(0x9aa3ad,{roughness:0.88}));
+  allMaterials.push(park.material);
+  park.rotation.x = -Math.PI/2;
+  park.position.set(TOWER.R1 + 5, -TOWER.Hb + 0.03, 0);
+  tag(park, 1, { name:'駐車場', kind:'context' });
+  scene.add(park);
+  const treeMat = makeStd(0x2a3a32,{roughness:0.9});
+  const snowCapMat = makeStd(0xF7FBFF,{roughness:0.95, emissive:0xF7FBFF, emissiveIntensity:0.05});
+  allMaterials.push(treeMat, snowCapMat);
+  for (let i=0;i<40;i++){
+    const a = (i/40)*Math.PI*2 + 0.15;
+    // keep clear near entrance +X
+    if (Math.abs(((a+Math.PI)%(2*Math.PI))-Math.PI) < 0.35) continue;
+    const d = TOWER.R_B1*1.7 + (i%5)*6.5;
+    const th = 2.2 + (i%4)*1.0;
+    const tree = new THREE.Mesh(new THREE.ConeGeometry(0.5+(i%3)*0.12, th, 5), treeMat);
+    tree.position.set(Math.cos(a)*d, -TOWER.Hb+th/2, Math.sin(a)*d);
+    tag(tree, -1, { kind:'context' });
+    scene.add(tree);
+    // tiny snow cap
+    const capR = 0.22 + (i%3)*0.05;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(capR, 6, 4), snowCapMat);
+    cap.position.set(Math.cos(a)*d, -TOWER.Hb + th - capR*0.2, Math.sin(a)*d);
+    tag(cap, -1, { kind:'context' });
+    scene.add(cap);
+  }
+}
+
+/* ========== falling snow (Points, lightweight) ========== */
+const SNOW_COUNT = 900;
+const SNOW_XZ = 70;
+const SNOW_Y_MAX = 50;
+let snowPositions, snowVel, snowPoints;
+function buildSnowfall(){
+  const geo = new THREE.BufferGeometry();
+  snowPositions = new Float32Array(SNOW_COUNT * 3);
+  snowVel = new Float32Array(SNOW_COUNT * 3);
+  for (let i = 0; i < SNOW_COUNT; i++){
+    const i3 = i * 3;
+    snowPositions[i3]     = (Math.random() * 2 - 1) * SNOW_XZ;
+    snowPositions[i3 + 1] = GROUND_Y + Math.random() * (SNOW_Y_MAX - GROUND_Y);
+    snowPositions[i3 + 2] = (Math.random() * 2 - 1) * SNOW_XZ;
+    snowVel[i3]     = (Math.random() - 0.5) * 0.35;
+    snowVel[i3 + 1] = -(0.55 + Math.random() * 0.7);
+    snowVel[i3 + 2] = (Math.random() - 0.5) * 0.35;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.16,
+    transparent: true,
+    opacity: 0.85,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  // omit clipping — outdoor snow should not clip oddly with tower section
+  snowPoints = new THREE.Points(geo, mat);
+  snowPoints.frustumCulled = false;
+  scene.add(snowPoints);
+}
+
+/* ========== subtle glass sparkle ========== */
+const SPARK_COUNT = 110;
+let sparkPositions, sparkPhases, sparkPoints, sparkSizes;
+function buildSparks(){
+  const geo = new THREE.BufferGeometry();
+  sparkPositions = new Float32Array(SPARK_COUNT * 3);
+  sparkPhases = new Float32Array(SPARK_COUNT);
+  sparkSizes = new Float32Array(SPARK_COUNT);
+  for (let i = 0; i < SPARK_COUNT; i++){
+    const i3 = i * 3;
+    // mid-height shell band
+    const t = 0.15 + Math.random() * 0.7;
+    const y = -TOWER.Hb + t * (tipY + TOWER.Hb);
+    const r = radiusAtY(y) * (0.98 + Math.random() * 0.04);
+    const az = Math.random() * Math.PI * 2;
+    sparkPositions[i3]     = Math.cos(az) * r;
+    sparkPositions[i3 + 1] = y;
+    sparkPositions[i3 + 2] = Math.sin(az) * r;
+    sparkPhases[i] = Math.random() * Math.PI * 2;
+    sparkSizes[i] = 0.08 + Math.random() * 0.1;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xe8f6ff,
+    size: 0.14,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+  });
+  applyClip(mat);
+  allMaterials.push(mat);
+  sparkPoints = new THREE.Points(geo, mat);
+  sparkPoints.frustumCulled = false;
+  towerRoot.add(sparkPoints);
+}
+
+buildShell();
+buildCore();
+buildSlabs();
+buildRooms();
+buildStairs();
+buildGround();
+buildSnowfall();
+buildSparks();
+
+/* ========== UI ========== */
+let labelsOn = true;
+let highlightFloor = 'all';
+const floorSel = document.getElementById('floorSel');
+const clipH = document.getElementById('clipH');
+const clipSliderLbl = document.getElementById('clipSliderLbl');
+
+function refreshMats(){
+  for (const m of allMaterials){
+    m.clippingPlanes = clipMode === 'off' ? [] : clipPlanes;
+    m.needsUpdate = true;
+  }
+}
+function updateClipPlane(){
+  const t = Number(clipH.value)/1000;
+  if (clipMode === 'vert'){
+    // default 0° = entrance axis (+X). Slider rotates normal about Y.
+    const θ = t * Math.PI * 2;
+    clipPlane.normal.set(Math.cos(θ), 0, Math.sin(θ));
+    clipPlane.constant = 0;
+  } else if (clipMode === 'horiz'){
+    const yMin = -TOWER.Hb, yMax = tipY;
+    const y = yMin + t*(yMax-yMin);
+    clipPlane.normal.set(0, -1, 0);
+    clipPlane.constant = y;
+  }
+}
+function setClipMode(mode){
+  clipMode = mode;
+  for (const [id,m] of [['clipVert','vert'],['clipHoriz','horiz'],['clipOff','off']]){
+    const b = document.getElementById(id);
+    const on = mode === m;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on?'true':'false');
+  }
+  if (mode==='vert'){ clipSliderLbl.textContent='方位'; clipH.value='0'; }
+  else if (mode==='horiz'){ clipSliderLbl.textContent='高さ'; clipH.value='700'; }
+  else clipSliderLbl.textContent='—';
+  updateClipPlane();
+  refreshMats();
+}
+document.getElementById('clipVert').onclick = ()=>setClipMode('vert');
+document.getElementById('clipHoriz').onclick = ()=>setClipMode('horiz');
+document.getElementById('clipOff').onclick = ()=>setClipMode('off');
+clipH.oninput = updateClipPlane;
+
+const btnLabels = document.getElementById('btnLabels');
+btnLabels.onclick = ()=>{
+  labelsOn = !labelsOn;
+  btnLabels.textContent = labelsOn ? 'ラベル ON' : 'ラベル OFF';
+  btnLabels.classList.toggle('active', labelsOn);
+  btnLabels.setAttribute('aria-pressed', labelsOn?'true':'false');
+  if (!labelsOn) labelAnchors.forEach(a=>a.el.style.display='none');
+};
+
+document.getElementById('btnReset').onclick = ()=>{
+  camera.position.set(30, 20, 34);
+  controls.target.set(0, Y11*0.32, 0);
+  controls.update();
+  floorSel.value='all';
+  highlightFloor='all';
+  applyFloorHighlight();
+  setClipMode('vert');
+};
+
+function applyFloorHighlight(){
+  towerRoot.traverse(obj=>{
+    if (!obj.isMesh && !obj.isPoints) return;
+    if (obj.isPoints && obj === sparkPoints){ obj.visible = true; return; }
+    const fi = obj.userData.floorIndex;
+    const kind = obj.userData.kind;
+    if (highlightFloor==='all'){ obj.visible=true; return; }
+    const want = Number(highlightFloor);
+    if (kind==='shell'){ obj.visible = true; return; }
+    if (fi === undefined){ obj.visible = true; return; }
+    obj.visible = (fi === want);
+  });
+}
+
+floorSel.onchange = ()=>{
+  highlightFloor = floorSel.value;
+  applyFloorHighlight();
+  if (highlightFloor!=='all'){
+    const fi = Number(highlightFloor);
+    const y = yFloor(fi) + floorHeight(fi)*0.5;
+    const R = radiusAtFloor(fi);
+    const dist = Math.max(12, R*2.1);
+    controls.target.set(0,y,0);
+    camera.position.set(dist*0.85, y+dist*0.3, dist*0.65);
+    controls.update();
+    if (clipMode==='horiz'){
+      const yCut = yFloor(fi)+floorHeight(fi);
+      const t = (yCut-(-TOWER.Hb))/(tipY-(-TOWER.Hb));
+      clipH.value = String(Math.round(Math.min(1,Math.max(0,t))*1000));
+      updateClipPlane();
+    }
+  }
+};
+
+setClipMode('vert');
+
+const _v = new THREE.Vector3();
+function updateLabels(){
+  if (!labelsOn) return;
+  const w=window.innerWidth, h=window.innerHeight;
+  const camDist = camera.position.distanceTo(controls.target);
+  for (const a of labelAnchors){
+    if (highlightFloor!=='all' && a.floor!==Number(highlightFloor)){ a.el.style.display='none'; continue; }
+    _v.copy(a.pos).project(camera);
+    if (_v.z>1){ a.el.style.display='none'; continue; }
+    const x=(_v.x*0.5+0.5)*w, y=(-_v.y*0.5+0.5)*h;
+    if (x<-40||x>w+40||y<-40||y>h+40){ a.el.style.display='none'; continue; }
+    const dist = camera.position.distanceTo(a.pos);
+    if (dist>55 && camDist>40){ a.el.textContent=floorLabel(a.floor); a.el.classList.add('floor-badge'); }
+    else { a.el.textContent=a.name; a.el.classList.remove('floor-badge'); }
+    a.el.style.display='block';
+    a.el.style.left=x+'px'; a.el.style.top=y+'px';
+  }
+}
+
+function updateSnow(dt){
+  const pos = snowPositions;
+  const vel = snowVel;
+  const yLo = GROUND_Y - 0.5;
+  const yHi = SNOW_Y_MAX;
+  for (let i = 0; i < SNOW_COUNT; i++){
+    const i3 = i * 3;
+    pos[i3]     += vel[i3] * dt;
+    pos[i3 + 1] += vel[i3 + 1] * dt;
+    pos[i3 + 2] += vel[i3 + 2] * dt;
+    // gentle horizontal wobble
+    pos[i3]     += Math.sin(pos[i3 + 1] * 0.4 + i) * 0.008;
+    if (pos[i3 + 1] < yLo){
+      pos[i3 + 1] = yHi;
+      pos[i3]     = (Math.random() * 2 - 1) * SNOW_XZ;
+      pos[i3 + 2] = (Math.random() * 2 - 1) * SNOW_XZ;
+    }
+    if (pos[i3] > SNOW_XZ) pos[i3] = -SNOW_XZ;
+    else if (pos[i3] < -SNOW_XZ) pos[i3] = SNOW_XZ;
+    if (pos[i3 + 2] > SNOW_XZ) pos[i3 + 2] = -SNOW_XZ;
+    else if (pos[i3 + 2] < -SNOW_XZ) pos[i3 + 2] = SNOW_XZ;
+  }
+  snowPoints.geometry.attributes.position.needsUpdate = true;
+}
+
+function updateSparks(t){
+  // subtle opacity / size pulse — not disco
+  const pulse = 0.22 + 0.18 * (0.5 + 0.5 * Math.sin(t * 1.1));
+  sparkPoints.material.opacity = pulse;
+  sparkPoints.material.size = 0.11 + 0.06 * (0.5 + 0.5 * Math.sin(t * 0.7 + 1.3));
+}
+
+function onResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', ()=>setTimeout(onResize,200));
+document.addEventListener('gesturestart', e=>e.preventDefault());
+document.body.addEventListener('touchmove', e=>{
+  if (e.target===canvas||e.target===document.body||e.target===document.documentElement) e.preventDefault();
+}, {passive:false});
+
+const _clock = new THREE.Clock();
+(function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(_clock.getDelta(), 0.05);
+  const t = _clock.elapsedTime;
+  updateSnow(dt);
+  updateSparks(t);
+  controls.update();
+  renderer.render(scene, camera);
+  updateLabels();
+})();
+</script>
+</body>
+</html>
