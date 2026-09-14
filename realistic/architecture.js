@@ -14,9 +14,14 @@ export function radius(y){
   return Math.max(.02, 2.496 * (1 - (y - 35.2) / (TOP - 35.2)));
 }
 export const SPACES = [
-  [-1,'メインキッチン',225,110,'kitchen'],[-1,'倉庫',315,62,'storage'],[-1,'冷凍室',45,48,'storage'],[-1,'発電室',90,40,'service'],
-  [1,'正面玄関',0,24,'entry'],[1,'廊下',0,34,'corridor'],[1,'ホール',42,28,'hall'],[1,'遊戯室',90,76,'play'],[1,'シアター',180,64,'theater'],[1,'サブキッチン',236,44,'kitchen'],[1,'ダイニング',310,75,'dining'],
-  [2,'玖の部屋',135,90,'guest'],[2,'拾の部屋',225,90,'guest'],[3,'捌の部屋',225,106,'guest'],[4,'漆の部屋',45,106,'guest'],[5,'陸の部屋',0,106,'guest'],[6,'伍の部屋',135,106,'guest'],[7,'肆の部屋',135,106,'guest'],[8,'参の部屋',45,106,'guest'],[9,'弐の部屋',0,106,'guest'],[10,'壱の部屋',0,106,'guest'],[11,'展望室',60,360,'observatory'],[11,'階段室',-35,50,'stair']
+  [-1,'メインキッチン',225,120,'kitchen'],[-1,'倉庫',315,80,'storage'],[-1,'冷凍室',45,55,'storage'],[-1,'発電室',90,70,'service'],
+  [1,'正面玄関',0,35,'entry'],[1,'廊下',0,40,'corridor'],[1,'ホール',0,360,'hall'],
+  [1,'遊戯室',90,90,'play'],[1,'シアター',180,85,'theater'],[1,'サブキッチン',225,70,'kitchen'],[1,'ダイニング',315,90,'dining'],
+  [2,'玖の部屋',135,100,'guest'],[2,'拾の部屋',225,100,'guest'],
+  [3,'捌の部屋',225,110,'guest'],[4,'漆の部屋',45,110,'guest'],[5,'陸の部屋',0,110,'guest'],
+  [6,'伍の部屋',135,110,'guest'],[7,'肆の部屋',135,110,'guest'],[8,'参の部屋',45,110,'guest'],
+  [9,'弐の部屋',0,110,'guest'],[10,'壱の部屋',0,110,'guest'],
+  [11,'展望室',0,360,'observatory'],[11,'階段室',0,60,'stair']
 ].map(([floor,name,az,span,kind])=>({floor,name,az,span,kind}));
 const D = Math.PI / 180;
 const V = (r,y,a) => new THREE.Vector3(r*Math.cos(a),y,r*Math.sin(a));
@@ -121,9 +126,14 @@ export function createArchitecture(M){
     if(fi<0){push(annulus(R-.22,R,y,H,80),M.foundation)}
     for(const sp of SPACES.filter(s=>s.floor===fi)){
       const a=sp.az*D,span=sp.span*D,outer=rt-.24;
-      const labelR=['entry'].includes(sp.kind)?R*.9:sp.kind==='stair'?1.05:Math.max(1.7,(2.28+outer)*.5);
+      const labelR=sp.kind==='hall'&&sp.span>=360?2.0:['entry'].includes(sp.kind)?R*.9:sp.kind==='stair'?1.05:Math.max(1.7,(2.28+outer)*.5);
       anchors.push({name:sp.name,floor:fi,pos:V(labelR,y+1.25,a)});
-      if(!['entry','corridor','hall','observatory','stair'].includes(sp.kind)){
+      if(sp.kind==='hall'&&sp.span>=360){
+        // Annular lobby band around the core (full 360°); no wedge walls or furniture.
+        const hallOuter=Math.min(R*.55,outer*.5,4.8);
+        push(annulus(2.28,hallOuter,y+.226,.018,96),M.corridor);
+        push(annulus(hallOuter-.07,hallOuter,y+.23,.92,96),M.plaster);
+      }else if(!['entry','corridor','hall','observatory','stair'].includes(sp.kind)){
         // Walls stop before the exterior mullions. No intersecting room volumes.
         for(const aa of [a-span/2,a+span/2]){
           const len=Math.max(.1,outer-2.35),mid=2.35+len/2;
@@ -138,6 +148,19 @@ export function createArchitecture(M){
         arc(2.33,y+2.44,a-doorAngle,doorAngle*2,.031,M.wood);
         placeFurniture(fi,sp,outer);
       }else if(sp.kind==='hall'){placeFurniture(fi,sp,outer)}
+      else if(sp.kind==='stair'&&fi===11){
+        // Small stair enclosure beside the core; door opens toward the spiral.
+        const roomR=1.85,w=1.4,d=1.05,hh=2.4,base=y+.2;
+        const cx=Math.cos(a)*roomR,cz=Math.sin(a)*roomR;
+        const ox=Math.cos(a),oz=Math.sin(a),sx=Math.cos(a+Math.PI/2),sz=Math.sin(a+Math.PI/2);
+        box(cx+ox*(d/2),base+hh/2,cz+oz*(d/2),w,hh,.09,M.plaster,-a);
+        box(cx+sx*(w/2),base+hh/2,cz+sz*(w/2),.09,hh,d,M.plaster,-a);
+        box(cx-sx*(w/2),base+hh/2,cz-sz*(w/2),.09,hh,d,M.plaster,-a);
+        const doorW=.55,side=(w-doorW)/2;
+        box(cx-ox*(d/2)+sx*((doorW+side)/2),base+hh/2,cz-oz*(d/2)+sz*((doorW+side)/2),side,hh,.09,M.plaster,-a);
+        box(cx-ox*(d/2)-sx*((doorW+side)/2),base+hh/2,cz-oz*(d/2)-sz*((doorW+side)/2),side,hh,.09,M.plaster,-a);
+        box(cx,base+hh-.02,cz,w-.05,.08,d-.05,M.wood,-a);
+      }
     }
     if(fi===11){
       for(let j=0;j<6;j++){

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-light="dusk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -10,39 +10,96 @@
   <link rel="stylesheet" href="./style.css">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
 </head>
-<body>
+<body data-light="dusk">
   <canvas id="scene" aria-label="硝子館の3Dモデル。ドラッグで回転、ピンチまたはホイールで拡大。"></canvas>
   <div class="vignette" aria-hidden="true"></div>
   <div id="labels" aria-hidden="true"></div>
   <header class="masthead">
-    <div class="identity"><span class="eyebrow">THE GLASS TOWER</span><h1>硝子館<span>冬の光景</span></h1><p>雪の静寂に、灯りが浮かぶ。</p></div>
+    <h1>硝子館</h1>
     <div class="header-actions">
-      <div class="segmented light-switch" aria-label="光の設定"><button id="dusk" aria-pressed="true">夕景</button><button id="day" aria-pressed="false">昼景</button></div>
+      <div class="segmented light-switch" aria-label="光の設定">
+        <button id="dusk" aria-pressed="true">夕景</button>
+        <button id="day" aria-pressed="false">昼景</button>
+      </div>
       <button class="round" id="info" aria-label="このビューアについて" aria-expanded="false">i</button>
+      <button class="round" id="more" aria-label="その他の操作" aria-expanded="false" aria-haspopup="true">…</button>
     </div>
   </header>
   <aside id="about" hidden>
     <button class="close" id="closeInfo" aria-label="説明を閉じる">×</button>
-    <span class="eyebrow">ABOUT THIS SCENE</span><h2>光と空間を、自由に。</h2>
+    <span class="eyebrow">THE GLASS TOWER</span>
+    <h2>光と空間を、自由に。</h2>
+    <p class="poem">雪の静寂に、灯りが浮かぶ。</p>
     <p>地下1階から地上11階まで。ガラス越しの灯り、雪の森、螺旋階段を巡る空間ビューアです。</p>
     <p>元のビューアの階構成・部屋名を引き継いだ、見た目の試作です。家具・窓枠・照明・植栽はイメージとして追加しています。原作の建築を厳密に再現するものではありません。</p>
     <dl><dt>回転</dt><dd>1本指／ドラッグ</dd><dt>拡大・移動</dt><dd>2本指／ホイール・右ドラッグ</dd><dt>表示を戻す</dt><dd>「全景」ボタン</dd></dl>
-    <p class="fine">v0.4 · 空間名のみ／物語のネタバレなし<br>無料のThree.jsを使用。有料素材・配信サーバーは使用していません。</p>
+    <p class="fine">v0.5 · 空間名のみ／物語のネタバレなし<br>無料のThree.jsを使用。有料素材・配信サーバーは使用していません。</p>
     <a href="../">元のビューアと比べる <span>↗</span></a>
   </aside>
-  <div class="scene-caption"><span class="caption-mark"></span><div><span id="sceneTitle">BLUE HOUR</span><p id="sceneSubtitle">外観 · 雪とガラス、暖かな室内光</p></div></div>
-  <div class="side-tools"><button id="orbit" class="tool" aria-pressed="false" title="自動回転"><span aria-hidden="true">↻</span><span>自動回転</span></button><button id="reset" class="tool" title="カメラを全景に戻す"><span aria-hidden="true">⌖</span><span>全景</span></button><button id="save" class="tool" title="現在の3D画面をPNGで保存"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6l1.5-2h5L16 6h4v14H4V6z"/><circle cx="12" cy="12" r="3.5"/></svg><span>画像保存</span></button></div>
+  <div id="moreMenu" class="popover" hidden role="menu" aria-label="その他の操作">
+    <button id="orbit" role="menuitem" aria-pressed="false"><span class="menu-ico" aria-hidden="true">↻</span>自動回転</button>
+    <button id="save" role="menuitem"><span class="menu-ico" aria-hidden="true">📷</span>画像保存</button>
+    <div class="menu-sep" aria-hidden="true"></div>
+    <label class="quality-control" role="none">
+      <span>画質</span>
+      <select id="quality" aria-label="画質">
+        <option value="auto">自動</option>
+        <option value="high">高精細</option>
+        <option value="light">軽量</option>
+      </select>
+    </label>
+  </div>
   <footer class="dock" id="dock" aria-label="表示コントロール">
-    <div class="mode-row"><div class="segmented modes" aria-label="表示モード"><button id="exterior" aria-pressed="true"><span class="mode-icon">◇</span>外観</button><button id="vertical" aria-pressed="false"><span class="mode-icon">◐</span>縦断面</button><button id="horizontal" aria-pressed="false"><span class="mode-icon">▱</span>水平断面</button></div><span class="dock-divider"></span><label class="floor-control"><span>階</span><select id="floor" aria-label="表示する階"><option value="all">全体</option><option value="-1">B1</option><option value="1">1F</option><option value="2">2F</option><option value="3">3F</option><option value="4">4F</option><option value="5">5F</option><option value="6">6F</option><option value="7">7F</option><option value="8">8F</option><option value="9">9F</option><option value="10">10F</option><option value="11">11F</option></select></label></div>
-    <div class="detail-row"><div class="section-control" id="sectionControl" hidden><label id="cutLabel" for="cut">断面の方位</label><input id="cut" type="range" min="0" max="360" value="55" aria-label="断面の方位"><output id="cutValue" for="cut">55°</output></div><span class="gesture" id="gesture">ドラッグで回転 · ピンチで拡大</span><div class="detail-actions"><button id="labelToggle" aria-pressed="false">部屋名 <span>OFF</span></button><label class="quality-control"><span>画質</span><select id="quality" aria-label="画質"><option value="auto">自動</option><option value="high">高精細</option><option value="light">軽量</option></select></label></div></div>
+    <div class="dock-row mode-row">
+      <div class="segmented modes" aria-label="表示モード">
+        <button id="exterior" aria-pressed="true"><span class="mode-icon">◇</span>外観</button>
+        <button id="vertical" aria-pressed="false"><span class="mode-icon">◐</span>縦断面</button>
+        <button id="horizontal" aria-pressed="false"><span class="mode-icon">▱</span>水平断面</button>
+      </div>
+    </div>
+    <div class="dock-row floor-row" aria-label="表示する階">
+      <div class="floor-pills" id="floorPills" role="group">
+        <button type="button" class="floor-pill" data-floor="all" aria-pressed="true">全体</button>
+        <button type="button" class="floor-pill" data-floor="-1" aria-pressed="false">B1</button>
+        <button type="button" class="floor-pill" data-floor="1" aria-pressed="false">1F</button>
+        <button type="button" class="floor-pill" data-floor="2" aria-pressed="false">2F</button>
+        <button type="button" class="floor-pill" data-floor="3" aria-pressed="false">3F</button>
+        <button type="button" class="floor-pill" data-floor="4" aria-pressed="false">4F</button>
+        <button type="button" class="floor-pill" data-floor="5" aria-pressed="false">5F</button>
+        <button type="button" class="floor-pill" data-floor="6" aria-pressed="false">6F</button>
+        <button type="button" class="floor-pill" data-floor="7" aria-pressed="false">7F</button>
+        <button type="button" class="floor-pill" data-floor="8" aria-pressed="false">8F</button>
+        <button type="button" class="floor-pill" data-floor="9" aria-pressed="false">9F</button>
+        <button type="button" class="floor-pill" data-floor="10" aria-pressed="false">10F</button>
+        <button type="button" class="floor-pill" data-floor="11" aria-pressed="false">11F</button>
+      </div>
+    </div>
+    <div class="dock-row detail-row">
+      <div class="section-control" id="sectionControl" hidden>
+        <label id="cutLabel" for="cut">カット</label>
+        <input id="cut" type="range" min="0" max="360" value="55" aria-label="カット">
+        <output id="cutValue" for="cut">55°</output>
+      </div>
+      <span class="gesture" id="gesture">1指回転・2指拡大</span>
+      <div class="detail-actions">
+        <button id="labelToggle" aria-pressed="false">部屋名 <span>OFF</span></button>
+        <button id="reset" title="カメラを全景に戻す">全景</button>
+      </div>
+    </div>
   </footer>
-  <div id="loading" role="status"><div class="loading-ring"></div><p>硝子館に、灯りをともしています。</p></div>
-  <div id="error" role="alert" hidden><h2>3D表示を開始できませんでした</h2><p id="errorMessage">SafariまたはChromeの通常のタブで開き直してください。</p><button id="retry">もう一度読み込む</button><a href="../">元のビューアを開く</a></div>
+  <div id="loading" role="status"><div class="loading-ring"></div><p>読み込み中</p></div>
+  <div id="error" role="alert" hidden>
+    <div class="error-card">
+      <h2>表示できませんでした</h2>
+      <p id="errorMessage">通信やブラウザの設定を確認してください。</p>
+      <button id="retry" class="primary">再読み込み</button>
+    </div>
+  </div>
   <div id="toast" role="status" aria-live="polite"></div>
   <noscript>この3DビューアにはJavaScriptが必要です。</noscript>
   <script>
     window.sceneFailed = function(message){document.getElementById('loading').hidden=true;document.getElementById('error').hidden=false;document.getElementById('errorMessage').textContent=message;document.getElementById('retry').onclick=()=>location.reload()};
-    window.addEventListener('unhandledrejection',e=>{console.error(e.reason);window.sceneFailed('3Dデータを読み込めませんでした。通信を確認し、SafariまたはChromeで開き直してください。')});
+    window.addEventListener('unhandledrejection',e=>{console.error(e.reason);window.sceneFailed('3Dデータを読み込めませんでした。通信を確認し、再読み込みしてください。')});
   </script>
   <script type="module" src="./scene.js" onerror="sceneFailed('3Dデータを読み込めませんでした。通信を確認して再読み込みしてください。')"></script>
 </body>
